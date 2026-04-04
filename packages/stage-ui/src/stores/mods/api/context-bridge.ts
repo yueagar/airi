@@ -275,27 +275,41 @@ export const useContextBridgeStore = defineStore('mods:api:context-bridge', () =
           // - https://chromestatus.com/feature/6265472244514816
           // - https://developer.mozilla.org/en-US/docs/Web/API/SharedWorker
           // - https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API
-          navigator.locks.request('context-bridge:event:input:text', async () => {
-            try {
-              await chatOrchestrator.ingest(messageText, {
-                model: activeModel.value,
-                chatProvider,
-                input: {
-                  type: 'input:text',
-                  data: {
-                    ...event.data,
-                    text,
-                    textRaw,
-                    overrides,
-                    contextUpdates: normalizedContextUpdates,
+          // Use ifAvailable so only the FIRST window/tab to acquire the lock
+          // processes this event — all others skip instead of queuing.
+          // Include the event ID in the lock name so different events can still
+          // be processed concurrently.
+          const eventId = event.metadata?.event?.id ?? nanoid()
+          navigator.locks.request(
+            `context-bridge:event:input:text:${eventId}`,
+            { ifAvailable: true },
+            async (lock) => {
+              if (!lock) {
+                // Another window/tab is already handling this event
+                return
+              }
+
+              try {
+                await chatOrchestrator.ingest(messageText, {
+                  model: activeModel.value,
+                  chatProvider,
+                  input: {
+                    type: 'input:text',
+                    data: {
+                      ...event.data,
+                      text,
+                      textRaw,
+                      overrides,
+                      contextUpdates: normalizedContextUpdates,
+                    },
                   },
-                },
-              }, targetSessionId)
-            }
-            catch (err) {
-              console.error('Error ingesting text input via context bridge:', err)
-            }
-          })
+                }, targetSessionId)
+              }
+              catch (err) {
+                console.error('Error ingesting text input via context bridge:', err)
+              }
+            },
+          )
         }
       }))
 

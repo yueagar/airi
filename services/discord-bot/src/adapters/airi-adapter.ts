@@ -94,6 +94,14 @@ export class DiscordAdapter {
   }
 
   private setupEventHandlers(): void {
+    // Auth diagnostics
+    this.airiClient.onEvent('module:authenticated', (event) => {
+      log.log('Airi server auth result:', event.data.authenticated)
+    })
+    this.airiClient.onEvent('error', (event) => {
+      log.warn('Airi server error:', (event.data as { message?: string }).message)
+    })
+
     // Handle configuration from UI
     this.airiClient.onEvent('module:configure', async (event) => {
       if (this.isReconnecting) {
@@ -159,13 +167,26 @@ export class DiscordAdapter {
     // Handle output from AIRI system (IA response)
     this.airiClient.onEvent('output:gen-ai:chat:message', async (event) => {
       try {
-        const message = (event.data as { message?: { content: string } }).message
-        const discordContext = (event.data)['gen-ai:chat'].input.data.discord
+        const message = (event.data as { message?: { content: string | Array<{ type: string, text?: string }> } }).message
+        const discordContext = (event.data as { discord?: Discord }).discord
 
-        if (message?.content && discordContext?.channelId) {
+        if (!discordContext?.channelId) {
+          // Not a Discord-originated response (e.g. from the local UI) — ignore silently
+          return
+        }
+
+        if (!message?.content) {
+          log.warn('Received output:gen-ai:chat:message with empty content for Discord channel', discordContext.channelId)
+          return
+        }
+
+        if (message.content && discordContext.channelId) {
           const channel = await this.discordClient.channels.fetch(discordContext.channelId)
           if (channel?.isTextBased() && 'send' in channel && typeof channel.send === 'function') {
-            const content = message.content
+            const rawContent = message.content
+            const content = Array.isArray(rawContent)
+              ? rawContent.filter(p => p.type === 'text').map(p => p.text ?? '').join('')
+              : rawContent
             if (content.length <= 2000) {
               await channel.send(content)
             }
@@ -258,6 +279,21 @@ export class DiscordAdapter {
         const discordNotice = normalizedDiscord
           ? `The input is coming from Discord channel ${normalizedDiscord.channelId} (Guild: ${normalizedDiscord.guildId ?? 'unknown'}).`
           : undefined
+
+        // Ensure the AIRI WebSocket is open before sending.
+        // send() silently drops events when the socket is not open.
+        // isSocketOpen (WebSocket.OPEN) is sufficient — the server processes events
+        // as soon as the peer is authenticated, before the announce handshake completes.
+        if (!this.airiClient.isSocketOpen) {
+          log.withFields({ status: this.airiClient.connectionStatus }).warn('AIRI WebSocket not open, waiting up to 10s before sending input:text...')
+          try {
+            await this.airiClient.connect({ timeout: 10_000 })
+          }
+          catch (err) {
+            log.withError(err as Error).error('AIRI server did not become ready in time, dropping message')
+            return
+          }
+        }
 
         this.airiClient.send({
           type: 'input:text',

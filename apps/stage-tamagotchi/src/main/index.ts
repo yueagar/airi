@@ -179,10 +179,10 @@ app.whenReady().then(async () => {
     callback: noop,
   })
 
-  injeca.start().catch(err => console.error(err))
+  await injeca.start()
 
   // Lifecycle
-  emitAppReady()
+  await emitAppReady()
 
   // Extra
   openDebugger()
