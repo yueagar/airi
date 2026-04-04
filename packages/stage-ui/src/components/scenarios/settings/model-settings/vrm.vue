@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ModelPositionKeys } from '@proj-airi/stage-ui-three'
 import type { AnimationKey } from '@proj-airi/stage-ui-three/assets/vrm'
 
 import type { ModelSettingsRuntimeSnapshot } from './runtime'
@@ -7,7 +8,7 @@ import { useModelStore } from '@proj-airi/stage-ui-three'
 import { animations } from '@proj-airi/stage-ui-three/assets/vrm'
 import { Button, Callout, FieldCombobox, SelectTab } from '@proj-airi/ui'
 import { storeToRefs } from 'pinia'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useSettingsVrm } from '../../../../stores/settings/vrm'
@@ -21,10 +22,12 @@ const props = withDefaults(defineProps<{
 }>(), {
   allowExtractColors: true,
 })
-
 defineEmits<{
   (e: 'extractColorsFromModel'): void
 }>()
+const RE_UPPER = /([A-Z])/g
+const RE_DIGIT = /(\d+)/g
+const RE_WORD_START = /\b\w/g
 
 const { t } = useI18n()
 
@@ -32,6 +35,8 @@ const modelStore = useModelStore()
 const {
   modelSize,
   modelOffset,
+  modelPositionStep,
+  modelPositionKeys,
   cameraFOV,
   modelRotationY,
   cameraDistance,
@@ -61,10 +66,10 @@ const { vrmIdleAnimation } = storeToRefs(vrmSettings)
 /** Converts a camelCase animation key to a human-readable label. */
 function animationLabel(key: string): string {
   return key
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/(\d+)/g, ' $1')
+    .replace(RE_UPPER, ' $1')
+    .replace(RE_DIGIT, ' $1')
     .trim()
-    .replace(/\b\w/g, c => c.toUpperCase())
+    .replace(RE_WORD_START, c => c.toUpperCase())
 }
 
 const animationOptions = computed(() =>
@@ -82,6 +87,42 @@ const trackingOptions = computed<{
   { value: 'mouse', label: t('settings.vrm.scale-and-position.eye-tracking-mode.options.option.mouse'), class: 'col-start-4' },
   { value: 'none', label: t('settings.vrm.scale-and-position.eye-tracking-mode.options.option.disabled'), class: 'col-start-5' },
 ])
+
+// === Position hotkeys ===
+const capturing = ref<keyof ModelPositionKeys | null>(null)
+
+/** Returns a short human-readable label for a KeyboardEvent.key value. */
+function formatKey(key: string): string {
+  const map: Record<string, string> = {
+    'ArrowLeft': '←',
+    'ArrowRight': '→',
+    'ArrowUp': '↑',
+    'ArrowDown': '↓',
+    ' ': 'Space',
+    'Escape': 'Esc',
+    'Delete': 'Del',
+    'Backspace': '⌫',
+    'Enter': '↵',
+    'Tab': '⇥',
+  }
+  return map[key] ?? (key.length === 1 ? key.toUpperCase() : key)
+}
+
+function captureKey(action: keyof ModelPositionKeys) {
+  capturing.value = action
+
+  function onKeydown(event: KeyboardEvent) {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    if (event.key !== 'Escape')
+      modelPositionKeys.value = { ...modelPositionKeys.value, [action]: event.key }
+    capturing.value = null
+    document.removeEventListener('keydown', onKeydown, true)
+  }
+
+  // Use capture phase so this runs before the hotkey handler
+  document.addEventListener('keydown', onKeydown, true)
+}
 
 // switch between hemisphere light and sky box
 const settingsLockClass = computed(() => {
@@ -257,6 +298,53 @@ const envOptions = computed(() => [
         :options="animationOptions"
         :disabled="controlsLocked"
       />
+    </div>
+    <!-- Position hotkeys -->
+    <div :class="['px-2', 'pt-2', 'text-xs', 'text-neutral-500', 'dark:text-neutral-400']">
+      Position Hotkeys
+    </div>
+    <div :class="['p-2', ...settingsLockClass]">
+      <div :class="['grid', 'grid-cols-[1fr_auto]', 'items-center', 'gap-x-3', 'gap-y-1', 'text-xs']">
+        <span class="text-neutral-600 dark:text-neutral-400">Step size</span>
+        <input
+          v-model.number="modelPositionStep"
+          type="number"
+          min="0.001"
+          step="0.001"
+          :disabled="controlsLocked"
+          :class="[
+            'w-20 rounded-md px-1.5 py-0.5 text-right font-mono',
+            'bg-neutral-100 dark:bg-neutral-900',
+            'outline-none',
+            'disabled:opacity-50',
+          ]"
+        >
+        <template
+          v-for="(action, label) in ({
+            'Move left': 'left',
+            'Move right': 'right',
+            'Move up': 'up',
+            'Move down': 'down',
+            'Reset position': 'reset',
+          } as Record<string, keyof ModelPositionKeys>)" :key="action"
+        >
+          <span class="text-neutral-600 dark:text-neutral-400">{{ label }}</span>
+          <button
+            :disabled="controlsLocked"
+            :class="[
+              'min-w-14 rounded-md px-2 py-0.5 font-mono text-center text-xs',
+              'transition-colors duration-150',
+              capturing === action
+                ? ['bg-blue-500/20', 'text-blue-600', 'dark:text-blue-400', 'ring-1', 'ring-blue-400']
+                : ['bg-neutral-100', 'dark:bg-neutral-900', 'hover:bg-neutral-200', 'dark:hover:bg-neutral-800'],
+              'disabled:opacity-50 disabled:cursor-not-allowed',
+            ]"
+            @click="captureKey(action)"
+          >
+            {{ capturing === action ? '…' : formatKey(modelPositionKeys[action]) }}
+          </button>
+        </template>
+      </div>
     </div>
   </Container>
   <Container

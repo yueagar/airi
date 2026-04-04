@@ -19,6 +19,14 @@ export interface SceneBootstrap {
   modelOrigin: Vec3
   modelSize: Vec3
 }
+export interface ModelPositionKeys {
+  left: string
+  right: string
+  up: string
+  down: string
+  reset: string
+}
+
 export type TrackingMode = 'camera' | 'mouse' | 'none'
 export type ScenePhase = 'pending' | 'loading' | 'binding' | 'mounted' | 'no-model' | 'error'
 export type HexColor = string & { __hex?: true }
@@ -146,6 +154,14 @@ export const useModelStore = defineStore('modelStore', () => {
   // === User scene settings ===
   // These values are intended to survive model reloads and direct edits from settings UI.
   const modelOffset = useLocalStorage('settings/stage-ui-three/modelOffset', { x: 0, y: 0, z: 0 })
+  const modelPositionStep = useLocalStorage('settings/stage-ui-three/modelPositionStep', 0.01)
+  const modelPositionKeys = useLocalStorage<ModelPositionKeys>('settings/stage-ui-three/modelPositionKeys', {
+    left: 'ArrowLeft',
+    right: 'ArrowRight',
+    up: 'ArrowUp',
+    down: 'ArrowDown',
+    reset: 'r',
+  })
   const modelRotationY = useLocalStorage('settings/stage-ui-three/modelRotationY', 0)
   const cameraFOV = useLocalStorage('settings/stage-ui-three/cameraFOV', 40)
   const trackingMode = useLocalStorage('settings/stage-ui-three/trackingMode', 'none' as 'camera' | 'mouse' | 'none')
@@ -224,6 +240,8 @@ export const useModelStore = defineStore('modelStore', () => {
     modelSize,
     modelOrigin,
     modelOffset,
+    modelPositionStep,
+    modelPositionKeys,
     modelRotationY,
 
     cameraFOV,
