@@ -983,6 +983,20 @@ onMounted(async () => {
       vrmGroup.value.rotation.y = MathUtils.degToRad(newRotationY)
     }
   }, { immediate: true })
+  // swap idle animation without reloading the model
+  watch(idleAnimation, async (newAnimation) => {
+    if (!vrm.value || !vrmAnimationMixer.value)
+      return
+
+    const animation = await loadVRMAnimation(newAnimation)
+    const clip = await clipFromVRMAnimation(vrm.value, animation)
+    if (!clip)
+      return
+
+    reAnchorRootPositionTrack(clip, vrm.value)
+    vrmAnimationMixer.value.stopAllAction()
+    vrmAnimationMixer.value.clipAction(clip).play()
+  })
   // update NPR sky box
   watch([envSelect, skyBoxIntensity, nprIrrSH], async () => {
     if (!vrm.value)
