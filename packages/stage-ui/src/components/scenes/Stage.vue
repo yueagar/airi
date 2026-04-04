@@ -2,6 +2,7 @@
 import type { DuckDBWasmDrizzleDatabase } from '@proj-airi/drizzle-duckdb-wasm'
 import type { Live2DLipSync, Live2DLipSyncOptions } from '@proj-airi/model-driver-lipsync'
 import type { Profile } from '@proj-airi/model-driver-lipsync/shared/wlipsync'
+import type { AnimationKey } from '@proj-airi/stage-ui-three/assets/vrm'
 import type { SpeechProviderWithExtraOptions } from '@xsai-ext/providers/utils'
 import type { UnElevenLabsOptions } from 'unspeech'
 
@@ -69,6 +70,7 @@ const {
   live2dShadowEnabled,
   live2dMaxFps,
   live2dRenderScale,
+  vrmIdleAnimation,
 } = storeToRefs(settingsStore)
 const { mouthOpenSize } = storeToRefs(useSpeakingStore())
 const { audioContext } = useAudioContext()
@@ -597,7 +599,7 @@ defineExpose({
         v-model:state="componentState"
         min-w="50% <lg:full" min-h="100 sm:100" h-full w-full flex-1
         :model-src="stageModelSelectedUrl"
-        :idle-animation="animations.idleLoop.toString()"
+        :idle-animation="(animations[vrmIdleAnimation as AnimationKey] ?? animations.idleLoop).toString()"
         :paused="paused"
         :show-axes="stageViewControlsEnabled"
         :current-audio-source="currentAudioSource"

@@ -1,3 +1,28 @@
 export const animations = {
   idleLoop: new URL('./idle_loop.vrma', import.meta.url),
+  agent007: new URL('./agent_007.vrma', import.meta.url),
+  aiCatDance: new URL('./ai_cat_dance.vrma', import.meta.url),
+  armsSwing: new URL('./arms_swing.vrma', import.meta.url),
+  armsUpDownDance: new URL('./arms_up_down_dance.vrma', import.meta.url),
+  blingBang: new URL('./bling_bang.vrma', import.meta.url),
+  confidentPose: new URL('./confident_pose.vrma', import.meta.url),
+  cool: new URL('./cool.vrma', import.meta.url),
+  crabDance: new URL('./crab_dance.vrma', import.meta.url),
+  energetic: new URL('./energetic.vrma', import.meta.url),
+  flamboyant: new URL('./flamboyant.vrma', import.meta.url),
+  grandstand: new URL('./grandstand.vrma', import.meta.url),
+  hitoMania: new URL('./hito_mania.vrma', import.meta.url),
+  humansAreJustCylinders: new URL('./humans_are_just_cylinders.vrma', import.meta.url),
+  innocent: new URL('./innocent.vrma', import.meta.url),
+  kawaiiKaiwai: new URL('./kawaii_kaiwai.vrma', import.meta.url),
+  ladylake: new URL('./ladylake.vrma', import.meta.url),
+  magicEyeWink: new URL('./magic_eye_wink.vrma', import.meta.url),
+  peaceSign: new URL('./peace_sign.vrma', import.meta.url),
+  powerful: new URL('./powerful.vrma', import.meta.url),
+  showcase: new URL('./showcase.vrma', import.meta.url),
+  shy: new URL('./shy.vrma', import.meta.url),
+  sittingToWave: new URL('./sitting_to_wave.vrma', import.meta.url),
+  tetris: new URL('./tetris.vrma', import.meta.url),
 }
+
+export type AnimationKey = keyof typeof animations

@@ -6,6 +6,7 @@ import { useSettingsGeneral } from './general'
 import { useSettingsLive2d } from './live2d'
 import { useSettingsStageModel } from './stage-model'
 import { useSettingsTheme } from './theme'
+import { useSettingsVrm } from './vrm'
 
 export * from './analytics'
 // Export sub-stores
@@ -18,6 +19,7 @@ export * from './stage-model'
 export * from './theme'
 // Export constants
 export { DEFAULT_THEME_COLORS_HUE } from './theme'
+export * from './vrm'
 
 /**
  * Unified settings store for backward compatibility.
@@ -31,6 +33,7 @@ export const useSettings = defineStore('settings', () => {
   const analytics = useSettingsAnalytics()
   const stageModel = useSettingsStageModel()
   const live2d = useSettingsLive2d()
+  const vrm = useSettingsVrm()
   const theme = useSettingsTheme()
   const controlsIsland = useSettingsControlsIsland()
 
@@ -39,6 +42,7 @@ export const useSettings = defineStore('settings', () => {
     analytics.resetState()
     general.resetState()
     live2d.resetState()
+    vrm.resetState()
     theme.resetState()
     controlsIsland.resetState()
   }
@@ -48,6 +52,7 @@ export const useSettings = defineStore('settings', () => {
   const analyticsRefs = storeToRefs(analytics)
   const stageModelRefs = storeToRefs(stageModel)
   const live2dRefs = storeToRefs(live2d)
+  const vrmRefs = storeToRefs(vrm)
   const themeRefs = storeToRefs(theme)
   const controlsIslandRefs = storeToRefs(controlsIsland)
 
@@ -65,6 +70,9 @@ export const useSettings = defineStore('settings', () => {
     stageModelSelectedUrl: stageModelRefs.stageModelSelectedUrl,
     stageModelSelectedDisplayModel: stageModelRefs.stageModelSelectedDisplayModel,
     stageViewControlsEnabled: stageModelRefs.stageViewControlsEnabled,
+
+    // VRM settings
+    vrmIdleAnimation: vrmRefs.vrmIdleAnimation,
 
     // Live2D settings
     live2dDisableFocus: live2dRefs.live2dDisableFocus,

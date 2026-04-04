@@ -1118,6 +1118,8 @@ vrm:
     from-url-confirm: Load
     from-url-placeholder: Enter VRM model URL
     title: Change Model
+  idle-animation:
+    title: Idle Animation
   title: VRM Settings
   scale-and-position:
     model-info-title: Model Size Information

@@ -1,12 +1,16 @@
 <script setup lang="ts">
+import type { AnimationKey } from '@proj-airi/stage-ui-three/assets/vrm'
+
 import type { ModelSettingsRuntimeSnapshot } from './runtime'
 
 import { useModelStore } from '@proj-airi/stage-ui-three'
-import { Button, Callout, SelectTab } from '@proj-airi/ui'
+import { animations } from '@proj-airi/stage-ui-three/assets/vrm'
+import { Button, Callout, FieldCombobox, SelectTab } from '@proj-airi/ui'
 import { storeToRefs } from 'pinia'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useSettingsVrm } from '../../../../stores/settings/vrm'
 import { Container, PropertyColor, PropertyNumber, PropertyPoint } from '../../../data-pane'
 import { ColorPalette } from '../../../widgets'
 
@@ -50,6 +54,25 @@ const {
 } = storeToRefs(modelStore)
 const controlsLocked = computed(() => props.runtimeSnapshot.controlsLocked)
 const canExtractColors = computed(() => props.runtimeSnapshot.canCapturePreview)
+
+const vrmSettings = useSettingsVrm()
+const { vrmIdleAnimation } = storeToRefs(vrmSettings)
+
+/** Converts a camelCase animation key to a human-readable label. */
+function animationLabel(key: string): string {
+  return key
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/(\d+)/g, ' $1')
+    .trim()
+    .replace(/\b\w/g, c => c.toUpperCase())
+}
+
+const animationOptions = computed(() =>
+  (Object.keys(animations) as AnimationKey[]).map(key => ({
+    value: key,
+    label: animationLabel(key),
+  })),
+)
 const trackingOptions = computed<{
   value: 'camera' | 'mouse' | 'none'
   label: string
@@ -226,6 +249,14 @@ const envOptions = computed(() => [
           />
         </div>
       </div>
+    </div>
+    <div p-2>
+      <FieldCombobox
+        v-model="vrmIdleAnimation"
+        :label="t('settings.vrm.idle-animation.title')"
+        :options="animationOptions"
+        :disabled="controlsLocked"
+      />
     </div>
   </Container>
   <Container
