@@ -7,6 +7,47 @@ import { parse } from 'valibot'
 import { toJsonSchema } from 'xsschema'
 
 /**
+ * Describes the stage-tamagotchi gamelet API expected on `ctx.apis`.
+ *
+ * Use when:
+ * - Tool execution wants to open, configure, close, or inspect host-managed gamelet surfaces
+ * - Runtime validation needs a structural contract independent from `@proj-airi/plugin-sdk`
+ *
+ * Expects:
+ * - The stage-tamagotchi host contribution installs `gamelets` on the plugin session API object
+ *
+ * Returns:
+ * - The host-backed gamelet control surface exposed to tool callbacks
+ */
+export interface ToolExecutionGameletApi {
+  open: (id: string, params?: HostDataRecord) => Promise<void>
+  configure: (id: string, patch: HostDataRecord) => Promise<void>
+  request: (id: string, payload: HostDataRecord, options?: { timeoutMs?: number }) => Promise<HostDataRecord>
+  close: (id: string) => Promise<void>
+  isOpen: (id: string) => Promise<boolean> | boolean
+}
+
+/**
+ * Describes the tamagotchi-flavored plugin context accepted by {@link defineToolset}.
+ *
+ * Use when:
+ * - A plugin host exposes tool registration plus the stage-owned `gamelets` surface
+ * - Tests want to model the runtime shape without relying on baked-in SDK typing
+ *
+ * Expects:
+ * - `apis.tools.register` is available
+ * - `apis.gamelets` is installed by the stage-tamagotchi host contribution
+ *
+ * Returns:
+ * - A context shape compatible with the tamagotchi tool helper
+ */
+export interface TamagotchiToolContext {
+  apis: Pick<ContextInit['apis'], 'tools'> & {
+    gamelets: ToolExecutionGameletApi
+  }
+}
+
+/**
  * Describes the host services available while checking or executing a plugin tool.
  *
  * Use when:
@@ -19,12 +60,7 @@ import { toJsonSchema } from 'xsschema'
  * - A runtime capability surface for tool execution
  */
 export interface ToolExecutionContext {
-  gamelets: {
-    open: (id: string, params?: Record<string, unknown>) => Promise<void>
-    configure: (id: string, patch: Record<string, unknown>) => Promise<void>
-    close: (id: string) => Promise<void>
-    isOpen: (id: string) => boolean
-  }
+  gamelets: ToolExecutionGameletApi
 
   // TODO:
   // Add character/runtime orchestration APIs after the gamelet/tool path is stable.
@@ -85,14 +121,37 @@ export interface DefineToolsetOptions<TInputSchema = unknown> {
   tools: Array<PluginToolDefinition<TInputSchema>>
 }
 
-function createToolExecutionContext(): ToolExecutionContext {
+function isToolExecutionGameletApi(value: unknown): value is ToolExecutionGameletApi {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const candidate = value as Partial<Record<keyof ToolExecutionGameletApi, unknown>>
+
+  return typeof candidate.open === 'function'
+    && typeof candidate.configure === 'function'
+    && typeof candidate.request === 'function'
+    && typeof candidate.close === 'function'
+    && typeof candidate.isOpen === 'function'
+}
+
+function getToolExecutionGameletApi(
+  ctx: Pick<ContextInit, 'apis'> | TamagotchiToolContext,
+): ToolExecutionGameletApi {
+  const gamelets = (ctx.apis as Record<string, unknown>).gamelets
+
+  if (!isToolExecutionGameletApi(gamelets)) {
+    throw new Error('stage-tamagotchi gamelet API is not available on `ctx.apis.gamelets`.')
+  }
+
+  return gamelets
+}
+
+function createToolExecutionContext(
+  ctx: Pick<ContextInit, 'apis'> | TamagotchiToolContext,
+): ToolExecutionContext {
   return {
-    gamelets: {
-      async open() {},
-      async configure() {},
-      async close() {},
-      isOpen: () => false,
-    },
+    gamelets: getToolExecutionGameletApi(ctx),
   }
 }
 
@@ -151,6 +210,88 @@ function toHostDataRecord(value: object): HostDataRecord {
   return value as HostDataRecord
 }
 
+function isJsonSchemaNode(value: JsonSchema | boolean | JsonSchema[] | undefined): value is JsonSchema {
+  return Boolean(value && !Array.isArray(value) && typeof value === 'object')
+}
+
+function withNullableValue(schema: JsonSchema): JsonSchema {
+  const next: JsonSchema = { ...schema }
+
+  if (Array.isArray(next.enum)) {
+    next.enum = next.enum.includes(null) ? next.enum : [...next.enum, null]
+    return next
+  }
+
+  if (Array.isArray(next.type)) {
+    next.type = next.type.includes('null') ? next.type : [...next.type, 'null']
+    return next
+  }
+
+  if (typeof next.type === 'string') {
+    next.type = next.type === 'null' ? next.type : [next.type, 'null']
+    return next
+  }
+
+  next.anyOf = [...(next.anyOf ?? []), { type: 'null' }]
+  return next
+}
+
+/**
+ * Normalizes plugin tool JSON Schema for strict OpenAI-compatible validators.
+ *
+ * Before:
+ * - `{ properties: { optionalName: { type: "string" } }, required: [] }`
+ *
+ * After:
+ * - `{ properties: { optionalName: { type: ["string", "null"] } }, required: ["optionalName"] }`
+ */
+function normalizeStrictToolParameterSchema(schema: JsonSchema): JsonSchema {
+  const next: JsonSchema = { ...schema }
+
+  if (next.properties) {
+    const currentRequired = new Set(next.required ?? [])
+    const normalizedProperties = Object.fromEntries(
+      Object.entries(next.properties).map(([key, value]) => {
+        if (!isJsonSchemaNode(value)) {
+          return [key, value]
+        }
+
+        const normalizedValue = normalizeStrictToolParameterSchema(value)
+        return [
+          key,
+          currentRequired.has(key)
+            ? normalizedValue
+            : withNullableValue(normalizedValue),
+        ]
+      }),
+    )
+
+    next.properties = normalizedProperties
+    next.required = Object.keys(normalizedProperties)
+  }
+
+  if (Array.isArray(next.items)) {
+    next.items = next.items.map(item => isJsonSchemaNode(item) ? normalizeStrictToolParameterSchema(item) : item)
+  }
+  else if (isJsonSchemaNode(next.items)) {
+    next.items = normalizeStrictToolParameterSchema(next.items)
+  }
+
+  if (next.anyOf) {
+    next.anyOf = next.anyOf.map(value => isJsonSchemaNode(value) ? normalizeStrictToolParameterSchema(value) : value)
+  }
+
+  if (next.oneOf) {
+    next.oneOf = next.oneOf.map(value => isJsonSchemaNode(value) ? normalizeStrictToolParameterSchema(value) : value)
+  }
+
+  if (next.allOf) {
+    next.allOf = next.allOf.map(value => isJsonSchemaNode(value) ? normalizeStrictToolParameterSchema(value) : value)
+  }
+
+  return next
+}
+
 /**
  * Normalizes tool parameter schemas into the host-safe record shape expected by plugin-sdk.
  *
@@ -162,11 +303,11 @@ function toHostDataRecord(value: object): HostDataRecord {
  */
 async function serializeToolParameters(inputSchema: unknown): Promise<HostDataRecord> {
   if (isStandardSchema(inputSchema)) {
-    return toHostDataRecord(await toJsonSchema(inputSchema))
+    return toHostDataRecord(normalizeStrictToolParameterSchema(await toJsonSchema(inputSchema)))
   }
 
   if (isJsonSchemaRecord(inputSchema)) {
-    return toHostDataRecord(structuredClone(inputSchema))
+    return toHostDataRecord(normalizeStrictToolParameterSchema(structuredClone(inputSchema)))
   }
 
   throw new TypeError('Tool input schema must be a JSON Schema object or a Standard Schema instance.')
@@ -185,12 +326,14 @@ async function serializeToolParameters(inputSchema: unknown): Promise<HostDataRe
  * - Resolves after all tool registrations complete
  */
 export async function defineToolset(
-  ctx: Pick<ContextInit, 'apis'>,
+  ctx: Pick<ContextInit, 'apis'> | TamagotchiToolContext,
   options: DefineToolsetOptions,
 ): Promise<void> {
-  const executionContext = createToolExecutionContext()
+  const executionContext = createToolExecutionContext(ctx)
 
   for (const definition of options.tools) {
+    const isAvailable = definition.isAvailable
+
     await ctx.apis.tools.register({
       tool: {
         id: definition.id,
@@ -202,8 +345,8 @@ export async function defineToolset(
         },
         parameters: await serializeToolParameters(definition.inputSchema),
       },
-      availability: definition.isAvailable
-        ? () => definition.isAvailable?.(executionContext)
+      availability: isAvailable
+        ? () => isAvailable(executionContext)
         : undefined,
       execute: input => definition.execute(input, executionContext),
     })

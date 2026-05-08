@@ -1,6 +1,7 @@
 import type { I18n } from '../../libs/i18n'
 import type { WindowAuthManager } from '../../services/airi/auth'
 import type { ServerChannel } from '../../services/airi/channel-server'
+import type { GodotStageManager } from '../../services/airi/godot-stage'
 import type { McpStdioManager } from '../../services/airi/mcp-servers'
 import type { AutoUpdater } from '../../services/electron/auto-updater'
 import type { DevtoolsWindowManager } from '../devtools'
@@ -30,6 +31,7 @@ export function setupSettingsWindowReusableFunc(params: {
   devtoolsWindow: DevtoolsWindowManager
   onWindowCreated?: (window: BrowserWindow) => void
   serverChannel: ServerChannel
+  godotStageManager: GodotStageManager
   mcpStdioManager: McpStdioManager
   i18n: I18n
   windowAuthManager: WindowAuthManager
@@ -62,17 +64,19 @@ export function setupSettingsWindowReusableFunc(params: {
       return { action: 'deny' }
     })
 
-    await load(window, withHashRoute(rendererBase, currentRoute))
     settingsContext = await setupSettingsWindowInvokes({
       settingsWindow: window,
       widgetsManager: params.widgetsManager,
       autoUpdater: params.autoUpdater,
       devtoolsWindow: params.devtoolsWindow,
       serverChannel: params.serverChannel,
+      godotStageManager: params.godotStageManager,
       mcpStdioManager: params.mcpStdioManager,
       i18n: params.i18n,
       windowAuthManager: params.windowAuthManager,
     })
+
+    await load(window, withHashRoute(rendererBase, currentRoute))
 
     window.on('closed', () => {
       if (settingsContext)
